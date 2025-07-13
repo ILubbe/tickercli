@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/ilubbe/tickercli/colors"
 	"github.com/ilubbe/tickercli/ticker"
@@ -41,8 +42,10 @@ func main() {
 		os.Exit(1)
 	}
 
+	timestamp := time.Unix(quote.Timestamp, 0)
+
 	fmt.Println()
-	fmt.Printf("Quote for %s%s%s:\n", colors.Blue, chosenSymbol, colors.Reset)
+	fmt.Printf("Quote for %s%s%s at %s:\n", colors.Blue, chosenSymbol, colors.Reset, timestamp.Format(time.RFC1123))
 	fmt.Printf("  Current Price  : %s%.2f%s\n", colors.Blue, quote.Current, colors.Reset)
 	colorCode := colors.DetermineColor(quote.Change)
 	fmt.Printf("  Change         : %s%.2f (%.2f%%)%s\n", colorCode, quote.Change, quote.PercentChange, colors.Reset)
