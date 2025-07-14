@@ -3,6 +3,7 @@ package ticker
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 )
 
@@ -18,7 +19,8 @@ type FinnhubQuote struct {
 }
 
 func FetchQuote(symbol, apiKey string) (FinnhubQuote, error) {
-	url := fmt.Sprintf("https://finnhub.io/api/v1/quote?symbol=%s", symbol)
+	baseurl := "https://finnhub.io/api/v1"
+	url := fmt.Sprintf("%s/quote?symbol=%s", baseurl, symbol)
 
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", url, nil)
@@ -29,6 +31,10 @@ func FetchQuote(symbol, apiKey string) (FinnhubQuote, error) {
 	req.Header.Set("X-Finnhub-Token", apiKey)
 
 	resp, err := client.Do(req)
+	if resp.StatusCode == 429 {
+		return FinnhubQuote{}, fmt.Errorf("error: Rate limit reached at %s", baseurl)
+	}
+
 	if err != nil {
 		return FinnhubQuote{}, err
 	}
@@ -39,6 +45,7 @@ func FetchQuote(symbol, apiKey string) (FinnhubQuote, error) {
 	err = decoder.Decode(&quote)
 
 	if err != nil {
+		fmt.Println(symbol)
 		return FinnhubQuote{}, err
 	}
 
@@ -48,4 +55,24 @@ func FetchQuote(symbol, apiKey string) (FinnhubQuote, error) {
 	}
 
 	return quote, nil
+}
+
+func FetchSPY() (string, error) {
+	url := "https://stockanalysis.com/list/sp-500-stocks"
+	resp, err := http.Get(url)
+	if err != nil {
+		return "", fmt.Errorf("error: failed to fetch %s: %w", url, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("error: non-500 status code: %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("error: failed to read page body from %s: %w", url, err)
+	}
+
+	return string(body), nil
 }

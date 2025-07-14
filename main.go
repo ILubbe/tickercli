@@ -1,57 +1,41 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"os"
-	"strings"
-	"time"
+	"sync"
 
-	"github.com/ilubbe/tickercli/colors"
+	"github.com/ilubbe/tickercli/cmd"
+	"github.com/ilubbe/tickercli/data"
 	"github.com/ilubbe/tickercli/ticker"
 )
 
 func main() {
-	symbol := flag.String("symbol", "", "Ticker to lookup (e.g. AAPL)")
-	symbolShort := flag.String("s", "", "Ticker to lookup (e.g. AAPL)")
-	flag.Parse()
+	opts := cmd.ParseFlags()
 
-	chosenSymbol := *symbol
-	if *symbolShort != "" {
-		chosenSymbol = *symbolShort
+	if opts.Symbol != "" {
+		ticker.GetQuote(opts.Symbol)
 	}
 
-	if chosenSymbol == "" {
-		fmt.Println("Usage: tickercli [-s|-symbol] SYMBOL")
-		os.Exit(1)
+	if opts.Top20 || opts.Gainers || opts.Losers {
+		stocks, err := data.GetTop20()
+		if err != nil || len(stocks) == 0 {
+			fmt.Fprintf(os.Stderr, "error: could not get list of top 20 stocks in S&P 500")
+			os.Exit(1)
+		}
+
+		if opts.Top20 {
+			var wg sync.WaitGroup
+
+			for _, stockSymbol := range stocks {
+				wg.Add(1)
+				go func(stockSymbol string) {
+					defer wg.Done()
+					ticker.GetQuote(stockSymbol)
+				}(stockSymbol.Ticker)
+			}
+
+			wg.Wait()
+		}
 	}
-
-	chosenSymbol = strings.ToUpper(chosenSymbol)
-
-	apiKeyBytes, err := os.ReadFile("api.key")
-	if err != nil {
-		fmt.Printf("%sError reading API key:%s%s\n", colors.Red, err, colors.Reset)
-		os.Exit(1)
-	}
-
-	apiKey := strings.TrimSpace(string(apiKeyBytes))
-
-	quote, err := ticker.FetchQuote(chosenSymbol, apiKey)
-	if err != nil {
-		fmt.Printf("%sError fetching quote:%s%s\n", colors.Red, err, colors.Reset)
-		os.Exit(1)
-	}
-
-	timestamp := time.Unix(quote.Timestamp, 0)
-
-	fmt.Println()
-	fmt.Printf("Quote for %s%s%s at %s:\n", colors.Blue, chosenSymbol, colors.Reset, timestamp.Format(time.RFC1123))
-	fmt.Printf("  Current Price  : %s%.2f%s\n", colors.Blue, quote.Current, colors.Reset)
-	colorCode := colors.DetermineColor(quote.Change)
-	fmt.Printf("  Change         : %s%.2f (%.2f%%)%s\n", colorCode, quote.Change, quote.PercentChange, colors.Reset)
-	fmt.Printf("  Day High       : %.2f\n", quote.High)
-	fmt.Printf("  Day Low        : %.2f\n", quote.Low)
-	fmt.Printf("  Open           : %.2f\n", quote.Open)
-	fmt.Printf("  Previous Close : %.2f\n", quote.PreviousClose)
-	fmt.Println()
 }
